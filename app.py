@@ -1,22 +1,47 @@
 import os
 import requests
+import re
+import string
 from flask import Flask, render_template, request, jsonify
 from dotenv import load_dotenv
 from PyPDF2 import PdfReader
-
 import nltk
-try:
-    nltk.data.find('corpus/stopwords')
-except nltk.downloader.DownloadError:
-    nltk.download('stopwords')
-try:
-    nltk.data.find('tokenizers/punkt')
-except nltk.downloader.DownloadError:
-    nltk.download('punkt')
-
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk.stem import RSLPStemmer
+
+def initialize_nltk():
+    resources = {
+        'stopwords': 'portuguese',
+        'punkt': 'portuguese'
+    }
+    
+    print("Verificando recursos do NLTK...")
+    try:
+        stopwords.words(resources['stopwords'])
+        print(f"[NLTK] Recurso 'stopwords' ({resources['stopwords']}) OK.")
+    except LookupError:
+        print(f"[NLTK] Baixando recurso 'stopwords'...")
+        nltk.download('stopwords')
+
+    try:
+        word_tokenize('teste', language=resources['punkt'])
+        print(f"[NLTK] Recurso 'punkt' ({resources['punkt']}) OK.")
+    except LookupError:
+        print(f"[NLTK] Baixando recurso 'punkt'...")
+        nltk.download('punkt')
+        nltk.download('punkt_tab')
+        nltk.download('wordnet')
+        nltk.download('omw-1.4')
+    
+    try:
+        st = RSLPStemmer()
+        print(f"[NLTK] Recurso 'RSLP' ({resources['rslp']}) OK.")
+    except LookupError:
+        print(f"[NLTK] Baixando recurso 'RSLP'...")
+        nltk.download('rslp')
+
+    print("Verificação do NLTK concluída.")
 
 load_dotenv()
 
@@ -26,56 +51,56 @@ API_URL = "https://api-inference.huggingface.co/models/MoritzLaurer/mDeBERTa-v3-
 API_KEY = os.getenv("HUGGINGFACE_API_KEY")
 headers = {"Authorization": f"Bearer {API_KEY}"}
 
+def preprocess_text(text):
+    text = text.lower()
+    text = re.sub(f'[{re.escape(string.punctuation)}]', '', text)
+    tokens = word_tokenize(text, language='portuguese')
+    stop_words = set(stopwords.words('portuguese'))
+    filtered_tokens = [word for word in tokens if word not in stop_words]
+    stemmer = RSLPStemmer()
+    stemmed_tokens = [stemmer.stem(word) for word in filtered_tokens]
+    return " ".join(stemmed_tokens)
+
 def query_huggingface(payload):
     response = requests.post(API_URL, headers=headers, json=payload)
     return response.json()
 
 def classify_and_suggest(email_text):
+    processed_text = preprocess_text(email_text)
     payload = {
-        "inputs": email_text,
-        "parameters": {
-            "candidate_labels": ["Produtivo", "Improdutivo"]
-        },
+        "inputs": processed_text,
+        "parameters": { "candidate_labels": ["Produtivo", "Improdutivo"] },
     }
-    
     api_response = query_huggingface(payload)
-
     if 'labels' not in api_response or 'scores' not in api_response:
         if 'error' in api_response and 'estimated_time' in api_response:
             return {'error': 'Modelo de IA está sendo carregado. Tente novamente em alguns segundos.'}, 503
         return {'error': 'Resposta inesperada da API de IA.', 'details': api_response}, 500
-
     labels = api_response['labels']
     scores = api_response['scores']
     classification = labels[scores.index(max(scores))]
-
     suggested_reply = ""
     if classification == "Produtivo":
         suggested_reply = "Olá! Recebemos sua solicitação e nossa equipe já está analisando. Retornaremos o mais breve possível com uma atualização. Atenciosamente."
     else:
         suggested_reply = "Agradecemos o seu contato. Esta mensagem foi processada automaticamente."
-
     return {
         'classification': classification,
         'suggested_reply': suggested_reply
     }, 200
 
-
 @app.route('/')
 def index():
     return render_template('index.html')
 
-
 @app.route('/classify', methods=['POST'])
 def classify_email():
     email_text = ""
-
     try:
         if 'file' in request.files:
             file = request.files['file']
             if file.filename == '':
                 return jsonify({'error': 'Nenhum arquivo selecionado.'}), 400
-
             if file.filename.endswith('.txt'):
                 email_text = file.read().decode('utf-8')
             elif file.filename.endswith('.pdf'):
@@ -84,7 +109,6 @@ def classify_email():
                 email_text = "\n".join(text_parts)
             else:
                 return jsonify({'error': 'Formato de arquivo inválido. Use .txt ou .pdf'}), 400
-        
         else:
             data = request.get_json()
             email_text = data.get('email_text')
@@ -94,10 +118,10 @@ def classify_email():
         
         result, status_code = classify_and_suggest(email_text)
         return jsonify(result), status_code
-
     except Exception as e:
         return jsonify({'error': f'Ocorreu um erro ao processar sua solicitação: {str(e)}'}), 500
 
+initialize_nltk()
 
 if __name__ == '__main__':
     app.run(debug=True)
