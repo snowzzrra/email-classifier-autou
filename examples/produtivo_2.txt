@@ -1,0 +1,1 @@
+Prezados, estou com um problema ao acessar o sistema de relatórios. A página de login exibe um erro 500. Podem verificar, por favor?

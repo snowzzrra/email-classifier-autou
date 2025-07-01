@@ -52,14 +52,7 @@ API_KEY = os.getenv("HUGGINGFACE_API_KEY")
 headers = {"Authorization": f"Bearer {API_KEY}"}
 
 def preprocess_text(text):
-    text = text.lower()
-    text = re.sub(f'[{re.escape(string.punctuation)}]', '', text)
-    tokens = word_tokenize(text, language='portuguese')
-    stop_words = set(stopwords.words('portuguese'))
-    filtered_tokens = [word for word in tokens if word not in stop_words]
-    stemmer = RSLPStemmer()
-    stemmed_tokens = [stemmer.stem(word) for word in filtered_tokens]
-    return " ".join(stemmed_tokens)
+    return text.lower().strip()
 
 def query_huggingface(payload):
     response = requests.post(API_URL, headers=headers, json=payload)
@@ -67,26 +60,60 @@ def query_huggingface(payload):
 
 def classify_and_suggest(email_text):
     processed_text = preprocess_text(email_text)
+
+    productive_labels = [
+        "solicitação de suporte técnico",
+        "pedido de atualização de status de projeto",
+        "dúvida sobre procedimento de trabalho",
+        "marcação de reunião de negócios",
+        "envio de documento importante para análise"
+    ]
+    unproductive_labels = [
+        "mensagem de agradecimento ou cortesia",
+        "email de felicitações ou comemoração",
+        "assunto pessoal ou conversa informal", 
+        "spam, propaganda ou marketing",
+        "email ofensivo, impróprio ou reclamação",
+        "email de teste sem propósito definido"   
+    ]
+    
+    all_labels = productive_labels + unproductive_labels
+    
     payload = {
         "inputs": processed_text,
-        "parameters": { "candidate_labels": ["Produtivo", "Improdutivo"] },
+        "parameters": { "candidate_labels": all_labels },
     }
     api_response = query_huggingface(payload)
+
     if 'labels' not in api_response or 'scores' not in api_response:
         if 'error' in api_response and 'estimated_time' in api_response:
             return {'error': 'Modelo de IA está sendo carregado. Tente novamente em alguns segundos.'}, 503
         return {'error': 'Resposta inesperada da API de IA.', 'details': api_response}, 500
-    labels = api_response['labels']
-    scores = api_response['scores']
-    classification = labels[scores.index(max(scores))]
+
+    best_label = api_response['labels'][0]
+
+    classification = ""
+    if best_label in productive_labels:
+        classification = "Produtivo"
+    else:
+        classification = "Improdutivo"
+
     suggested_reply = ""
     if classification == "Produtivo":
         suggested_reply = "Olá! Recebemos sua solicitação e nossa equipe já está analisando. Retornaremos o mais breve possível com uma atualização. Atenciosamente."
     else:
-        suggested_reply = "Agradecemos o seu contato. Esta mensagem foi processada automaticamente."
+        if best_label == "email ofensivo, impróprio ou reclamação":
+             suggested_reply = "Sua mensagem foi recebida e será encaminhada ao departamento responsável para análise."
+        else:
+             suggested_reply = "Agradecemos o seu contato. Esta mensagem foi processada automaticamente."
+        
     return {
         'classification': classification,
-        'suggested_reply': suggested_reply
+        'suggested_reply': suggested_reply,
+        'debug_info': {
+             'best_label_found': best_label,
+             'score': api_response['scores'][0]
+        }
     }, 200
 
 @app.route('/')

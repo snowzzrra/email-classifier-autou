@@ -5,23 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Classificador de Emails com IA</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body { background-color: #f8f9fa; }
-        .container { max-width: 800px; }
-        .card { margin-top: 1.5rem; }
-        .spinner-border { display: none; }
-        #results-card, #history-card { display: none; }
-        .nav-tabs .nav-link { cursor: pointer; }
-        .form-control-file {
-            border: 1px solid #ced4da;
-            padding: 0.375rem 0.75rem;
-        }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body onload="loadHistory()">
+<body>
     <div class="container">
         <div class="text-center my-4">
-            <h1>Classificador de Emails v2.0</h1>
+            <h1>Classificador de Emails</h1>
             <p class="lead">Envie o conteúdo de um email para classificá-lo e receber uma sugestão de resposta.</p>
         </div>
 
@@ -31,174 +20,55 @@
                     <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" data-bs-target="#text-input-pane">Digitar Texto</a></li>
                     <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" data-bs-target="#file-input-pane">Upload de Arquivo</a></li>
                 </ul>
-                
                 <form id="email-form" class="mt-3">
                     <div class="tab-content">
                         <div class="tab-pane fade show active" id="text-input-pane">
                             <textarea class="form-control" id="email-text" rows="8" placeholder="Cole o texto do email aqui..."></textarea>
                         </div>
                         <div class="tab-pane fade" id="file-input-pane">
-                             <input type="file" class="form-control" id="email-file" accept=".txt,.pdf">
-                             <div class="form-text">Envie arquivos nos formatos .txt ou .pdf</div>
+                            <input type="file" class="form-control" id="email-file" accept=".txt,.pdf">
+                            <div class="form-text">Envie arquivos nos formatos .txt ou .pdf</div>
                         </div>
                     </div>
                     <button type="submit" class="btn btn-primary w-100 mt-3">
-                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true" style="display: none;"></span>
                         <span class="button-text">Classificar</span>
                     </button>
                 </form>
             </div>
         </div>
 
-        <div class="card" id="results-card">
+        <div id="error-alert" class="alert alert-danger mt-3" style="display: none;"></div>
+
+        <div class="card mt-3" id="results-card" style="display: none;">
             <div class="card-header">Resultado da Análise</div>
             <div class="card-body">
                 <h5 class="card-title">Classificação: <span id="classification-result" class="badge"></span></h5>
-                <p class="card-text"><strong>Resposta Sugerida:</strong></p>
-                <p id="suggested-reply" class="alert alert-secondary"></p>
+
+                <div class="mt-3">
+                    <small class="text-muted">Rótulo Detalhado: <strong id="debug-label"></strong></small>
+                    <div class="d-flex align-items-center mt-1">
+                        <small class="text-muted" style="min-width: 70px;">Confiança:</small>
+                        <div class="progress flex-grow-1" role="progressbar" aria-label="Confiança da IA" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="height: 18px;">
+                            <div id="confidence-bar" class="progress-bar fw-bold"></div>
+                        </div>
+                    </div>
+                </div>
+                <p class="card-text mt-4"><strong>Resposta Sugerida:</strong></p>
+                <div id="suggested-reply" class="alert alert-secondary"></div>
             </div>
         </div>
 
-        <div class="card" id="history-card">
+        <div class="card mt-3" id="history-card" style="display: none;">
             <div class="card-header d-flex justify-content-between align-items-center">
                 Histórico de Classificações
                 <button class="btn btn-sm btn-outline-danger" onclick="clearHistory()">Limpar</button>
             </div>
-            <ul class="list-group list-group-flush" id="history-list">
-                </ul>
+            <ul class="list-group list-group-flush" id="history-list"></ul>
         </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        // --- Gerenciamento da Interface ---
-        const form = document.getElementById('email-form');
-        const submitButton = form.querySelector('button[type="submit"]');
-        const spinner = submitButton.querySelector('.spinner-border');
-        const buttonText = submitButton.querySelector('.button-text');
-        
-        const resultsCard = document.getElementById('results-card');
-        const classificationResult = document.getElementById('classification-result');
-        const suggestedReply = document.getElementById('suggested-reply');
-
-        const historyCard = document.getElementById('history-card');
-        const historyList = document.getElementById('history-list');
-
-        // --- Lógica de Submissão do Formulário ---
-        form.addEventListener('submit', async function(event) {
-            event.preventDefault();
-
-            const activeTab = document.querySelector('#input-type-tabs .nav-link.active').getAttribute('data-bs-target');
-            let fetchOptions;
-
-            if (activeTab === '#text-input-pane') {
-                const emailText = document.getElementById('email-text').value;
-                if (!emailText.trim()) {
-                    alert('Por favor, insira o texto do email.');
-                    return;
-                }
-                fetchOptions = {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email_text: emailText })
-                };
-            } else {
-                const fileInput = document.getElementById('email-file');
-                const file = fileInput.files[0];
-                if (!file) {
-                    alert('Por favor, selecione um arquivo.');
-                    return;
-                }
-                const formData = new FormData();
-                formData.append('file', file);
-                fetchOptions = {
-                    method: 'POST',
-                    body: formData
-                };
-            }
-            
-            setLoadingState(true);
-
-            try {
-                const response = await fetch('/classify', fetchOptions);
-                const result = await response.json();
-
-                if (!response.ok) throw new Error(result.error || 'Ocorreu um erro desconhecido.');
-                
-                displayResults(result);
-                saveToHistory(result);
-
-            } catch (error) {
-                alert('Erro: ' + error.message);
-                resultsCard.style.display = 'none';
-            } finally {
-                setLoadingState(false);
-            }
-        });
-
-        function setLoadingState(isLoading) {
-            spinner.style.display = isLoading ? 'inline-block' : 'none';
-            buttonText.textContent = isLoading ? 'Processando...' : 'Classificar';
-            submitButton.disabled = isLoading;
-        }
-
-        function displayResults(result) {
-            classificationResult.textContent = result.classification;
-            classificationResult.className = result.classification === 'Produtivo' ? 'badge bg-success' : 'badge bg-warning text-dark';
-            suggestedReply.textContent = result.suggested_reply;
-            resultsCard.style.display = 'block';
-        }
-
-        // --- Lógica do Histórico ---
-        const HISTORY_KEY = 'emailClassificationHistory';
-
-        function saveToHistory(result) {
-            let history = JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
-            const textSnippet = document.getElementById('email-text').value.substring(0, 100) || "Arquivo: " + document.getElementById('email-file').files[0]?.name;
-            
-            const newEntry = {
-                classification: result.classification,
-                snippet: textSnippet + (textSnippet.length === 100 ? '...' : ''),
-                timestamp: new Date().toLocaleString('pt-BR')
-            };
-
-            history.unshift(newEntry);
-            history = history.slice(0, 5);
-
-            localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-            loadHistory();
-        }
-
-        function loadHistory() {
-            const history = JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
-            historyList.innerHTML = '';
-
-            if (history.length === 0) {
-                historyCard.style.display = 'none';
-                return;
-            }
-
-            history.forEach(item => {
-                const badgeClass = item.classification === 'Produtivo' ? 'bg-success' : 'bg-warning text-dark';
-                const li = document.createElement('li');
-                li.className = 'list-group-item';
-                li.innerHTML = `
-                    <div class="d-flex w-100 justify-content-between">
-                        <p class="mb-1">${item.snippet}</p>
-                        <small>${item.timestamp}</small>
-                    </div>
-                    <span class="badge ${badgeClass}">${item.classification}</span>
-                `;
-                historyList.appendChild(li);
-            });
-
-            historyCard.style.display = 'block';
-        }
-
-        function clearHistory() {
-            localStorage.removeItem(HISTORY_KEY);
-            loadHistory();
-        }
-    </script>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>
