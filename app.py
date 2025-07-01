@@ -4,11 +4,25 @@ from flask import Flask, render_template, request, jsonify
 from dotenv import load_dotenv
 from PyPDF2 import PdfReader
 
+import nltk
+try:
+    nltk.data.find('corpus/stopwords')
+except nltk.downloader.DownloadError:
+    nltk.download('stopwords')
+try:
+    nltk.data.find('tokenizers/punkt')
+except nltk.downloader.DownloadError:
+    nltk.download('punkt')
+
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from nltk.stem import RSLPStemmer
+
 load_dotenv()
 
 app = Flask(__name__)
 
-API_URL = "https://api-inference.huggingface.co/models/facebook/bart-large-mnli"
+API_URL = "https://api-inference.huggingface.co/models/MoritzLaurer/mDeBERTa-v3-base-mnli-xnli"
 API_KEY = os.getenv("HUGGINGFACE_API_KEY")
 headers = {"Authorization": f"Bearer {API_KEY}"}
 
