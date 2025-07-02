@@ -107,10 +107,10 @@ def classify_email():
             data = request.get_json()
             email_text = data.get('email_text')
 
-        if not email_text or not email_text.strip():
-            return jsonify({'error': 'O conteúdo do email está vazio.'}), 400
-        
         result, status_code = classify_email_with_gemini(email_text)
+        
+        result['processed_text'] = email_text 
+        
         return jsonify(result), status_code
     except Exception as e:
         return jsonify({'error': f'Ocorreu um erro ao processar sua solicitação: {str(e)}'}), 500

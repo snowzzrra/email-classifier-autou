@@ -55,7 +55,8 @@ async function handleFormSubmit(event) {
         }
         
         displayResults(result);
-        saveToHistory(result, textForHistory);
+        const textToSave = result.processed_text || textForHistory;
+        saveToHistory(result, textToSave);
 
     } catch (error) {
         displayError('Erro: ' + error.message);
