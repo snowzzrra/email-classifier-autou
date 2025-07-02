@@ -9,9 +9,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
 async function handleFormSubmit(event) {
     event.preventDefault();
-    hideError(); // Esconde erros antigos
+    hideError();
 
-    const submitButton = this.querySelector('button[type="submit"]');
     const activeTab = document.querySelector('#input-type-tabs .nav-link.active').getAttribute('data-bs-target');
     let fetchOptions;
     let textForHistory = "";
@@ -52,7 +51,6 @@ async function handleFormSubmit(event) {
         const result = await response.json();
 
         if (!response.ok) {
-            // Lança um erro para ser pego pelo bloco catch
             throw new Error(result.error || `Erro ${response.status}: Ocorreu um problema no servidor.`);
         }
         
@@ -82,30 +80,10 @@ function displayResults(result) {
     const resultsCard = document.getElementById('results-card');
     const classificationResult = document.getElementById('classification-result');
     const suggestedReply = document.getElementById('suggested-reply');
-    const debugLabel = document.getElementById('debug-label');
-    const confidenceBar = document.getElementById('confidence-bar');
 
-    // Preenche os resultados principais
     classificationResult.textContent = result.classification;
     classificationResult.className = result.classification === 'Produtivo' ? 'badge bg-success' : 'badge bg-warning text-dark';
     suggestedReply.textContent = result.suggested_reply;
-
-    // Preenche os detalhes da análise (confiança, etc.)
-    if (result.debug_info) {
-        const scorePercent = (result.debug_info.score * 100).toFixed(0);
-        debugLabel.textContent = `"${result.debug_info.best_label_found}"`;
-        
-        confidenceBar.style.width = `${scorePercent}%`;
-        confidenceBar.textContent = `${scorePercent}%`;
-        confidenceBar.setAttribute('aria-valuenow', scorePercent);
-
-        // Muda a cor da barra de progresso com base na confiança
-        let barClass = 'progress-bar ';
-        if (scorePercent > 75) barClass += 'bg-success';
-        else if (scorePercent > 40) barClass += 'bg-warning text-dark';
-        else barClass += 'bg-danger';
-        confidenceBar.className = barClass;
-    }
 
     resultsCard.style.display = 'block';
 }
@@ -132,12 +110,11 @@ function saveToHistory(result, originalText) {
     const newEntry = {
         classification: result.classification,
         snippet: textSnippet,
-        timestamp: new Date().toLocaleString('pt-BR'),
-        debug_info: result.debug_info // Salva as informações de debug
+        timestamp: new Date().toLocaleString('pt-BR')
     };
 
     history.unshift(newEntry);
-    history = history.slice(0, 10); // Aumentei para 10 itens no histórico
+    history = history.slice(0, 10);
 
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
     loadHistory();
@@ -157,16 +134,6 @@ function loadHistory() {
 
     history.forEach(item => {
         const badgeClass = item.classification === 'Produtivo' ? 'bg-success' : 'bg-warning text-dark';
-        let debugInfoHtml = '';
-        if (item.debug_info) {
-            const scorePercent = (item.debug_info.score * 100).toFixed(0);
-            debugInfoHtml = `
-                <small class="text-muted d-block mt-1">
-                    Confiança: <strong>${scorePercent}%</strong> | Motivo: <em>"${item.debug_info.best_label_found}"</em>
-                </small>
-            `;
-        }
-
         const li = document.createElement('li');
         li.className = 'list-group-item';
         li.innerHTML = `
@@ -174,10 +141,7 @@ function loadHistory() {
                 <p class="mb-1 fst-italic">"${item.snippet}"</p>
                 <small class="text-muted text-nowrap ms-3">${item.timestamp}</small>
             </div>
-            <div>
-                <span class="badge ${badgeClass}">${item.classification}</span>
-                ${debugInfoHtml}
-            </div>
+            <span class="badge ${badgeClass}">${item.classification}</span>
         `;
         historyList.appendChild(li);
     });

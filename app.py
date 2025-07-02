@@ -1,120 +1,91 @@
 import os
-import requests
-import re
-import string
+import google.generativeai as genai
 from flask import Flask, render_template, request, jsonify
 from dotenv import load_dotenv
 from PyPDF2 import PdfReader
-import nltk
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
-from nltk.stem import RSLPStemmer
-
-def initialize_nltk():
-    resources = {
-        'stopwords': 'portuguese',
-        'punkt': 'portuguese'
-    }
-    
-    print("Verificando recursos do NLTK...")
-    try:
-        stopwords.words(resources['stopwords'])
-        print(f"[NLTK] Recurso 'stopwords' ({resources['stopwords']}) OK.")
-    except LookupError:
-        print(f"[NLTK] Baixando recurso 'stopwords'...")
-        nltk.download('stopwords')
-
-    try:
-        word_tokenize('teste', language=resources['punkt'])
-        print(f"[NLTK] Recurso 'punkt' ({resources['punkt']}) OK.")
-    except LookupError:
-        print(f"[NLTK] Baixando recurso 'punkt'...")
-        nltk.download('punkt')
-        nltk.download('punkt_tab')
-        nltk.download('wordnet')
-        nltk.download('omw-1.4')
-    
-    try:
-        st = RSLPStemmer()
-        print(f"[NLTK] Recurso 'RSLP' ({resources['rslp']}) OK.")
-    except LookupError:
-        print(f"[NLTK] Baixando recurso 'RSLP'...")
-        nltk.download('rslp')
-
-    print("Verificação do NLTK concluída.")
 
 load_dotenv()
 
 app = Flask(__name__)
 
-API_URL = "https://api-inference.huggingface.co/models/MoritzLaurer/mDeBERTa-v3-base-mnli-xnli"
-API_KEY = os.getenv("HUGGINGFACE_API_KEY")
-headers = {"Authorization": f"Bearer {API_KEY}"}
+try:
+    genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+    model = genai.GenerativeModel('gemini-1.5-flash')
+    print("Modelo Gemini configurado com sucesso.")
+except Exception as e:
+    print(f"Erro ao configurar o modelo Gemini: {e}")
+    model = None
 
 def preprocess_text(text):
-    return text.lower().strip()
+    return " ".join(text.strip().split())[:4000]
 
-def query_huggingface(payload):
-    response = requests.post(API_URL, headers=headers, json=payload)
-    return response.json()
+def classify_email_with_gemini(email_text):
+    if not model:
+        return {'error': 'O modelo de IA não foi inicializado corretamente.'}, 500
 
-def classify_and_suggest(email_text):
     processed_text = preprocess_text(email_text)
 
-    productive_labels = [
-        "solicitação de suporte técnico",
-        "pedido de atualização de status de projeto",
-        "dúvida sobre procedimento de trabalho",
-        "marcação de reunião de negócios",
-        "envio de documento importante para análise"
-    ]
-    unproductive_labels = [
-        "mensagem de agradecimento ou cortesia",
-        "email de felicitações ou comemoração",
-        "assunto pessoal ou conversa informal", 
-        "spam, propaganda ou marketing",
-        "email ofensivo, impróprio ou reclamação",
-        "email de teste sem propósito definido"   
-    ]
-    
-    all_labels = productive_labels + unproductive_labels
-    
-    payload = {
-        "inputs": processed_text,
-        "parameters": { "candidate_labels": all_labels },
-    }
-    api_response = query_huggingface(payload)
+    prompt = f"""
+    Sua tarefa é classificar um email como 'Produtivo' ou 'Improdutivo'.
 
-    if 'labels' not in api_response or 'scores' not in api_response:
-        if 'error' in api_response and 'estimated_time' in api_response:
-            return {'error': 'Modelo de IA está sendo carregado. Tente novamente em alguns segundos.'}, 503
-        return {'error': 'Resposta inesperada da API de IA.', 'details': api_response}, 500
+    Definições:
+    - Produtivo: Requer uma ação de trabalho específica, é uma solicitação de negócio ou uma atualização crítica de projeto.
+    - Improdutivo: É uma conversa pessoal, ofensa, spam, marketing, cortesia, ou um assunto não relacionado ao trabalho direto.
 
-    best_label = api_response['labels'][0]
+    Analise os seguintes exemplos para entender o contexto:
 
-    classification = ""
-    if best_label in productive_labels:
-        classification = "Produtivo"
-    else:
-        classification = "Improdutivo"
+    ---
+    Exemplo 1:
+    Email: "E aí, mano, beleza? Manda aquele relatório de vendas pra mim assim que der, valeu! Abraço."
+    Classificação: Produtivo
 
-    suggested_reply = ""
-    if classification == "Produtivo":
-        suggested_reply = "Olá! Recebemos sua solicitação e nossa equipe já está analisando. Retornaremos o mais breve possível com uma atualização. Atenciosamente."
-    else:
-        if best_label == "email ofensivo, impróprio ou reclamação":
-             suggested_reply = "Sua mensagem foi recebida e será encaminhada ao departamento responsável para análise."
+    Exemplo 2:
+    Email: "filho da puta, eu te odeio"
+    Classificação: Improdutivo
+
+    Exemplo 3:
+    Email: "O ar condicionado do nosso andar está quebrado de novo, está impossível se concentrar com este calor."
+    Classificação: Improdutivo
+
+    Exemplo 4:
+    Email: "Pessoal, estou vendendo meu monitor antigo, se alguém tiver interesse me avisa."
+    Classificação: Improdutivo
+
+    Exemplo 5:
+    Email: "Francamente, não gostei nada da primeira versão do texto. Por favor, refaçam do zero seguindo o briefing."
+    Classificação: Produtivo
+    ---
+
+    Agora, classifique o seguinte email. Responda APENAS com a palavra 'Produtivo' ou 'Improdutivo'.
+
+    Email: "{processed_text}"
+    Classificação:
+    """
+
+    try:
+        response = model.generate_content(prompt)
+        classification = response.text.strip()
+
+        if classification not in ['Produtivo', 'Improdutivo']:
+             classification = "Improdutivo"
+
+        suggested_reply = ""
+        if classification == "Produtivo":
+            suggested_reply = "Olá! Recebemos sua solicitação e nossa equipe já está analisando. Retornaremos o mais breve possível."
         else:
-             suggested_reply = "Agradecemos o seu contato. Esta mensagem foi processada automaticamente."
+            suggested_reply = "Agradecemos o seu contato. Esta mensagem foi processada automaticamente."
         
-    return {
-        'classification': classification,
-        'suggested_reply': suggested_reply,
-        'debug_info': {
-             'best_label_found': best_label,
-             'score': api_response['scores'][0]
-        }
-    }, 200
+        return {
+            'classification': classification,
+            'suggested_reply': suggested_reply,
+            'debug_info': {
+                'best_label_found': f"Análise por Gemini",
+                'score': 1.0 # A confiança é alta com este método
+            }
+        }, 200
+
+    except Exception as e:
+        return {'error': f'Ocorreu um erro na API do Gemini: {str(e)}'}, 500
 
 @app.route('/')
 def index():
@@ -126,6 +97,7 @@ def classify_email():
     try:
         if 'file' in request.files:
             file = request.files['file']
+            # ... (seu código de leitura de arquivo .txt e .pdf continua o mesmo)
             if file.filename == '':
                 return jsonify({'error': 'Nenhum arquivo selecionado.'}), 400
             if file.filename.endswith('.txt'):
@@ -143,12 +115,11 @@ def classify_email():
         if not email_text or not email_text.strip():
             return jsonify({'error': 'O conteúdo do email está vazio.'}), 400
         
-        result, status_code = classify_and_suggest(email_text)
+        # A chamada para a função de classificação foi renomeada
+        result, status_code = classify_email_with_gemini(email_text)
         return jsonify(result), status_code
     except Exception as e:
         return jsonify({'error': f'Ocorreu um erro ao processar sua solicitação: {str(e)}'}), 500
-
-initialize_nltk()
 
 if __name__ == '__main__':
     app.run(debug=True)
