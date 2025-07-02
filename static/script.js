@@ -1,4 +1,9 @@
 document.addEventListener('DOMContentLoaded', function() {
+    // Inicializa todas as funcionalidades do frontend
+    initTheme();
+    initTutorial();
+    initExampleButtons();
+    initCopyButton();
     loadHistory();
 
     const form = document.getElementById('email-form');
@@ -7,6 +12,73 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
+// --- LÓGICA DO TEMA (MODO ESCURO) ---
+function initTheme() {
+    const themeToggle = document.getElementById('theme-toggle');
+    const sunIcon = '<i class="bi bi-sun-fill"></i>';
+    const moonIcon = '<i class="bi bi-moon-fill"></i>';
+
+    // Aplica o tema salvo no localStorage ao carregar a página
+    if (localStorage.getItem('theme') === 'dark') {
+        document.body.classList.add('dark-mode');
+        themeToggle.innerHTML = sunIcon;
+    } else {
+        themeToggle.innerHTML = moonIcon;
+    }
+
+    themeToggle.addEventListener('click', () => {
+        document.body.classList.toggle('dark-mode');
+        // Salva a preferência do usuário
+        if (document.body.classList.contains('dark-mode')) {
+            localStorage.setItem('theme', 'dark');
+            themeToggle.innerHTML = sunIcon;
+        } else {
+            localStorage.setItem('theme', 'light');
+            themeToggle.innerHTML = moonIcon;
+        }
+    });
+}
+
+// --- LÓGICA DO TUTORIAL DE PRIMEIRA VISITA ---
+function initTutorial() {
+    if (!localStorage.getItem('hasSeenTutorial')) {
+        const tutorialModal = new bootstrap.Modal(document.getElementById('tutorial-modal'));
+        tutorialModal.show();
+        // Marca que o tutorial foi visto para não mostrar novamente
+        localStorage.setItem('hasSeenTutorial', 'true');
+    }
+}
+
+// --- LÓGICA DOS BOTÕES DE EXEMPLO ---
+function initExampleButtons() {
+    const emailText = document.getElementById('email-text');
+    document.getElementById('load-example-prod').addEventListener('click', () => {
+        emailText.value = "Prezados, poderiam por gentileza verificar o status do ticket #8451? Precisamos de uma atualização para alinhar com o cliente final o mais rápido possível. Obrigado.";
+    });
+    document.getElementById('load-example-improd').addEventListener('click', () => {
+        emailText.value = "Só passando para desejar a todos um excelente final de semana! Se cuidem!";
+    });
+}
+
+// --- LÓGICA DO BOTÃO DE COPIAR ---
+function initCopyButton() {
+    const copyBtn = document.getElementById('copy-reply-btn');
+    copyBtn.addEventListener('click', () => {
+        const replyText = document.getElementById('suggested-reply').textContent;
+        navigator.clipboard.writeText(replyText).then(() => {
+            // Feedback visual para o usuário
+            const originalText = copyBtn.innerHTML;
+            copyBtn.innerHTML = '<i class="bi bi-check-lg"></i> Copiado!';
+            copyBtn.classList.add('btn-success');
+            setTimeout(() => {
+                copyBtn.innerHTML = originalText;
+                copyBtn.classList.remove('btn-success');
+            }, 2000);
+        });
+    });
+}
+
+// --- FUNÇÃO PRINCIPAL DO FORMULÁRIO ---
 async function handleFormSubmit(event) {
     event.preventDefault();
     hideError();
@@ -17,11 +89,11 @@ async function handleFormSubmit(event) {
 
     if (activeTab === '#text-input-pane') {
         const emailText = document.getElementById('email-text').value;
-        textForHistory = emailText;
         if (!emailText.trim()) {
             displayError('Por favor, insira o texto do email.');
             return;
         }
+        textForHistory = emailText;
         fetchOptions = {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -34,13 +106,10 @@ async function handleFormSubmit(event) {
             displayError('Por favor, selecione um arquivo.');
             return;
         }
-        textForHistory = `Arquivo: ${file.name}`;
+        textForHistory = `Arquivo: ${file.name}`; // Fallback inicial
         const formData = new FormData();
         formData.append('file', file);
-        fetchOptions = {
-            method: 'POST',
-            body: formData
-        };
+        fetchOptions = { method: 'POST', body: formData };
     }
 
     setLoadingState(true);
@@ -65,18 +134,6 @@ async function handleFormSubmit(event) {
     }
 }
 
-function setLoadingState(isLoading) {
-    const submitButton = document.querySelector('#email-form button[type="submit"]');
-    const spinner = submitButton.querySelector('.spinner-border');
-    const buttonText = submitButton.querySelector('.button-text');
-
-    if(submitButton) {
-        spinner.style.display = isLoading ? 'inline-block' : 'none';
-        buttonText.textContent = isLoading ? 'Processando...' : 'Classificar';
-        submitButton.disabled = isLoading;
-    }
-}
-
 function displayResults(result) {
     const resultsCard = document.getElementById('results-card');
     const classificationResult = document.getElementById('classification-result');
@@ -87,6 +144,18 @@ function displayResults(result) {
     suggestedReply.textContent = result.suggested_reply;
 
     resultsCard.style.display = 'block';
+}
+
+// --- Funções de Estado, Erro e Histórico ---
+function setLoadingState(isLoading) {
+    const submitButton = document.querySelector('#email-form button[type="submit"]');
+    const spinner = submitButton.querySelector('.spinner-border');
+    const buttonText = submitButton.querySelector('.button-text');
+    if(submitButton) {
+        spinner.style.display = isLoading ? 'inline-block' : 'none';
+        buttonText.textContent = isLoading ? 'Processando...' : 'Classificar';
+        submitButton.disabled = isLoading;
+    }
 }
 
 function displayError(message) {
@@ -104,7 +173,6 @@ const HISTORY_KEY = 'emailClassificationHistory';
 
 function saveToHistory(result, originalText) {
     let history = JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
-    
     let textSnippet = originalText.substring(0, 100);
     if (originalText.length > 100) textSnippet += '...';
     
@@ -116,7 +184,6 @@ function saveToHistory(result, originalText) {
 
     history.unshift(newEntry);
     history = history.slice(0, 10);
-
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
     loadHistory();
 }
@@ -127,7 +194,6 @@ function loadHistory() {
     const historyCard = document.getElementById('history-card');
     
     historyList.innerHTML = '';
-
     if (history.length === 0) {
         historyCard.style.display = 'none';
         return;
@@ -146,7 +212,6 @@ function loadHistory() {
         `;
         historyList.appendChild(li);
     });
-
     historyCard.style.display = 'block';
 }
 
