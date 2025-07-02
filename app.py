@@ -3,6 +3,7 @@ import google.generativeai as genai
 from flask import Flask, render_template, request, jsonify
 from dotenv import load_dotenv
 from PyPDF2 import PdfReader
+import json
 
 load_dotenv()
 
@@ -26,66 +27,61 @@ def classify_email_with_gemini(email_text):
     processed_text = preprocess_text(email_text)
 
     prompt = f"""
-    Sua tarefa é classificar um email como 'Produtivo' ou 'Improdutivo'.
+    Sua tarefa é analisar um email e retornar um objeto JSON com duas chaves: "classification" e "reply".
 
-    Definições:
+    Definições de Classificação:
     - Produtivo: Requer uma ação de trabalho específica, é uma solicitação de negócio ou uma atualização crítica de projeto.
     - Improdutivo: É uma conversa pessoal, ofensa, spam, marketing, cortesia, ou um assunto não relacionado ao trabalho direto.
 
-    Analise os seguintes exemplos para entender o contexto:
+    Diretrizes para a Resposta ('reply'):
+    - A resposta deve ser em português, breve, profissional e adequada ao conteúdo do email.
+    - Para emails produtivos, confirme o recebimento e informe que a equipe está analisando.
+    - Para emails improdutivos, use uma resposta genérica de agradecimento ou, se for ofensivo, uma resposta neutra.
 
+    Analise os exemplos a seguir para entender o formato de saída JSON:
     ---
     Exemplo 1:
-    Email: "E aí, mano, beleza? Manda aquele relatório de vendas pra mim assim que der, valeu! Abraço."
-    Classificação: Produtivo
+    Email: "Olá, poderiam me dar uma atualização sobre o status do projeto Alpha? Precisamos apresentar os resultados amanhã."
+    Resposta JSON: {{"classification": "Produtivo", "reply": "Olá! Recebemos sua solicitação de status sobre o projeto Alpha e retornaremos em breve com as informações."}}
 
     Exemplo 2:
-    Email: "filho da puta, eu te odeio"
-    Classificação: Improdutivo
+    Email: "babaca, seu serviço é um lixo"
+    Resposta JSON: {{"classification": "Improdutivo", "reply": "Agradecemos o seu feedback. Sua mensagem foi registrada."}}
 
     Exemplo 3:
-    Email: "O ar condicionado do nosso andar está quebrado de novo, está impossível se concentrar com este calor."
-    Classificação: Improdutivo
-
-    Exemplo 4:
-    Email: "Pessoal, estou vendendo meu monitor antigo, se alguém tiver interesse me avisa."
-    Classificação: Improdutivo
-
-    Exemplo 5:
-    Email: "Francamente, não gostei nada da primeira versão do texto. Por favor, refaçam do zero seguindo o briefing."
-    Classificação: Produtivo
+    Email: "Muito obrigado pela ajuda de ontem, foi excelente!"
+    Resposta JSON: {{"classification": "Improdutivo", "reply": "Agradecemos o seu contato e ficamos felizes em ajudar!"}}
     ---
 
-    Agora, classifique o seguinte email. Responda APENAS com a palavra 'Produtivo' ou 'Improdutivo'.
+    Agora, analise o seguinte email e forneça sua resposta APENAS no formato de um objeto JSON válido.
 
     Email: "{processed_text}"
-    Classificação:
+    Resposta JSON:
     """
 
     try:
         response = model.generate_content(prompt)
-        classification = response.text.strip()
-
-        if classification not in ['Produtivo', 'Improdutivo']:
-             classification = "Improdutivo"
-
-        suggested_reply = ""
-        if classification == "Produtivo":
-            suggested_reply = "Olá! Recebemos sua solicitação e nossa equipe já está analisando. Retornaremos o mais breve possível."
-        else:
-            suggested_reply = "Agradecemos o seu contato. Esta mensagem foi processada automaticamente."
         
+        cleaned_response_text = response.text.strip().replace('```json', '').replace('```', '')
+        
+        result_json = json.loads(cleaned_response_text)
+        
+        classification = result_json.get('classification', 'Improdutivo')
+        suggested_reply = result_json.get('reply', 'Agradecemos o contato.')
+
         return {
             'classification': classification,
             'suggested_reply': suggested_reply,
-            'debug_info': {
-                'best_label_found': f"Análise por Gemini",
-                'score': 1.0 # A confiança é alta com este método
-            }
+            'debug_info': { 'best_label_found': 'Análise por Gemini' }
         }, 200
 
-    except Exception as e:
-        return {'error': f'Ocorreu um erro na API do Gemini: {str(e)}'}, 500
+    except (json.JSONDecodeError, AttributeError, Exception) as e:
+        # Fallback para o método antigo se a IA não retornar um JSON válido
+        return {
+            'classification': 'Improdutivo',
+            'suggested_reply': 'Agradecemos o seu contato. Esta mensagem foi processada automaticamente.',
+            'debug_info': {'best_label_found': f'Fallback de Emergência: {e}'}
+        }, 200
 
 @app.route('/')
 def index():
@@ -97,7 +93,6 @@ def classify_email():
     try:
         if 'file' in request.files:
             file = request.files['file']
-            # ... (seu código de leitura de arquivo .txt e .pdf continua o mesmo)
             if file.filename == '':
                 return jsonify({'error': 'Nenhum arquivo selecionado.'}), 400
             if file.filename.endswith('.txt'):
@@ -115,7 +110,6 @@ def classify_email():
         if not email_text or not email_text.strip():
             return jsonify({'error': 'O conteúdo do email está vazio.'}), 400
         
-        # A chamada para a função de classificação foi renomeada
         result, status_code = classify_email_with_gemini(email_text)
         return jsonify(result), status_code
     except Exception as e:
