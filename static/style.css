@@ -20,6 +20,7 @@ body.dark-mode {
   --btn-outline-color: #adb5bd;
 }
 
+/* --- ESTILOS GERAIS --- */
 body {
   background-color: var(--bg-color);
   color: var(--text-color);
@@ -28,11 +29,18 @@ body {
   padding-bottom: 3rem;
 }
 
+h1, h5, .lead, .card-title, .card-text {
+    color: var(--text-color) !important;
+}
+
+.text-muted {
+    color: var(--text-muted) !important;
+}
+
 .card {
   background-color: var(--card-bg);
   border-color: var(--card-border);
 }
-
 .card-header {
     color: var(--text-color); 
     background-color: var(--alert-bg);
@@ -54,7 +62,6 @@ body {
 .form-control::placeholder {
     color: var(--text-muted);
 }
-
 .form-text {
     color: var(--text-muted);
 }
@@ -69,13 +76,12 @@ body {
 .nav-tabs {
     border-bottom-color: var(--card-border);
 }
-
 .nav-tabs .nav-link {
   color: var(--text-muted);
   cursor: pointer; 
 }
 .nav-tabs .nav-link.active {
-    color: var(--text-color);
+    color: var(--text-color) !important;
     background-color: var(--bg-color);
     border-bottom-color: var(--bg-color) !important;
 }
@@ -85,10 +91,6 @@ body {
     color: var(--text-color);
     border-color: var(--card-border);
 }
-.text-muted {
-    color: var(--text-muted) !important;
-}
-
 
 body.dark-mode .modal-content {
     background-color: var(--card-bg);
@@ -101,7 +103,6 @@ body.dark-mode .btn-close {
     filter: invert(1) grayscale(100%) brightness(200%);
 }
 
-
 .btn-outline-secondary {
     color: var(--btn-outline-color);
     border-color: var(--btn-outline-color);
@@ -112,11 +113,9 @@ body.dark-mode .btn-close {
     border-color: var(--btn-outline-color);
 }
 
-
 body.dark-mode .badge.text-dark {
     color: #1a1a1a !important;
 }
-
 
 #theme-toggle {
     position: fixed;
