@@ -51,6 +51,18 @@ def classify_email_with_gemini(email_text):
     Exemplo 3:
     Email: "Muito obrigado pela ajuda de ontem, foi excelente!"
     Resposta JSON: {{"classification": "Improdutivo", "reply": "Agradecemos o seu contato e ficamos felizes em ajudar!"}}
+
+    Exemplo 3:
+    Email: "O ar condicionado do nosso andar está quebrado de novo, está impossível se concentrar com este calor."
+    Resposta JSON: {{"classification": "Improdutivo", "reply": "Agradecemos o seu contato. Sua mensagem foi repassada para o setor responsável."}}
+
+    Exemplo 4:
+    Email: "Pessoal, estou vendendo meu monitor antigo, se alguém tiver interesse me avisa."
+    Resposta JSON: {{"classification": "Improdutivo", "reply": "Agradecemos o seu contato."}}
+
+    Exemplo 5:
+    Email: "Francamente, não gostei nada da primeira versão do texto. Por favor, refaçam do zero seguindo o briefing."
+    Resposta JSON: {{"classification": "Produtivo", "reply": "Agradecemos o seu feedback! Faremos o possível."}}
     ---
 
     Agora, analise o seguinte email e forneça sua resposta APENAS no formato de um objeto JSON válido.
