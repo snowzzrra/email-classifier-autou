@@ -10,8 +10,8 @@ O projeto foi construído com foco na precisão da IA, na qualidade técnica do 
 
 ## Links
 
-* **Acesse a Aplicação Online:** **[[LINK AQUI](https://email-classifier-autou-gyquwizys-guilhermes-projects-09547181.vercel.app/)]**
-* **Assista ao Vídeo Demonstrativo:** **[LINK AQUI]**
+* **Acesse a Aplicação Online:** **[LINK AQUI](https://email-classifier-autou.vercel.app/)**
+* **Assista ao Vídeo Demonstrativo:** **[LINK AQUI](https://youtu.be/4n-UFggU300)**
 
 ---
 
